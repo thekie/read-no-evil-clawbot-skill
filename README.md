@@ -1,6 +1,6 @@
-# Clawdbot Skill: read-no-evil-mcp
+# Clawbot Skill: read-no-evil-mcp
 
-Secure email access for [Clawdbot](https://github.com/clawdbot/clawdbot) with prompt injection protection.
+Secure email access for [Clawbot](https://github.com/clawbot/clawbot) with prompt injection protection.
 
 Uses [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) to scan emails for prompt injection attacks before your AI agent sees them.
 
@@ -20,7 +20,7 @@ clawdhub install read-no-evil-mcp
 
 ### Manual
 ```bash
-git clone https://github.com/thekie/read-no-evil-clawbot-skill.git ~/.clawdbot/skills/read-no-evil-mcp
+git clone https://github.com/thekie/read-no-evil-clawbot-skill.git ~/.clawbot/skills/read-no-evil-mcp
 pip install read-no-evil-mcp
 ```
 

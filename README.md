@@ -21,7 +21,7 @@ clawhub install read-no-evil-mcp
 ### Manual
 ```bash
 git clone https://github.com/thekie/read-no-evil-clawbot-skill.git ~/.clawbot/skills/read-no-evil-mcp
-pip install "read-no-evil-mcp>=0.2.0"
+pip install "read-no-evil-mcp==0.2.0"
 ```
 
 > **Note:** Skill version matches the required `read-no-evil-mcp` package version.

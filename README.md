@@ -13,9 +13,9 @@ Uses [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) to scan emai
 
 ## Installation
 
-### Via ClawdHub
+### Via ClawHub
 ```bash
-clawdhub install read-no-evil-mcp
+clawhub install read-no-evil-mcp
 ```
 
 ### Manual

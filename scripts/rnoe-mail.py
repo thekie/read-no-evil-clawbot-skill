@@ -114,12 +114,14 @@ def cmd_list(mailbox: rnoe.SecureMailbox, args):
             limit=args.limit,
         )
         
-        for email_summary in emails:
-            att = "📎" if email_summary.has_attachments else "  "
-            from_addr = str(email_summary.sender) if email_summary.sender else "(unknown)"
-            subject = email_summary.subject or "(no subject)"
-            date = email_summary.date.strftime("%Y-%m-%d %H:%M") if email_summary.date else ""
-            print(f"{att} {email_summary.uid:>4} | {from_addr[:40]:<40} | {subject[:45]:<45} | {date}")
+        for secure_email in emails:
+            # SecureEmailSummary wraps EmailSummary in .summary
+            email = secure_email.summary
+            att = "📎" if email.has_attachments else "  "
+            from_addr = str(email.sender) if email.sender else "(unknown)"
+            subject = email.subject or "(no subject)"
+            date = email.date.strftime("%Y-%m-%d %H:%M") if email.date else ""
+            print(f"{att} {email.uid:>4} | {from_addr[:40]:<40} | {subject[:45]:<45} | {date}")
     finally:
         mailbox.disconnect()
 

@@ -9,10 +9,10 @@ Secure email gateway that scans emails for prompt injection attacks before you s
 
 ## Prerequisites
 
-Install the read-no-evil-mcp package:
+Install the read-no-evil-mcp package (version must match skill version):
 
 ```bash
-pip install read-no-evil-mcp
+pip install read-no-evil-mcp>=0.2.0
 ```
 
 ## Configuration

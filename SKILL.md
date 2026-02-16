@@ -109,7 +109,7 @@ scripts/setup-server.sh --config /path/to/config.yaml \
 
 ## CLI Commands
 
-All commands accept `--server URL` to specify the MCP server (default: `http://localhost:8000`). Can also be set via `RNOE_SERVER_URL` env var.
+Global options (`--server`, `--account`, `--folder`) can appear before or after the command. Server URL can also be set via `RNOE_SERVER_URL` env var.
 
 ```bash
 # List configured accounts
@@ -117,16 +117,17 @@ rnoe-mail.py accounts
 
 # List recent emails (last 30 days)
 rnoe-mail.py list
-rnoe-mail.py list --limit 10 --days 7 --account myaccount
+rnoe-mail.py list --account myaccount --limit 10 --days 7
 
 # Read email (scanned for prompt injection!)
 rnoe-mail.py read <uid>
+rnoe-mail.py --account myaccount read <uid>
 
 # Send email
 rnoe-mail.py send --to "user@example.com" --subject "Hello" --body "Message"
 
 # List folders
-rnoe-mail.py folders
+rnoe-mail.py folders --account myaccount
 
 # Move email to folder
 rnoe-mail.py move <uid> --to "Archive"
@@ -134,8 +135,9 @@ rnoe-mail.py move <uid> --to "Archive"
 # Delete email
 rnoe-mail.py delete <uid>
 
-# Use a specific server
+# Global options can go before or after the command
 rnoe-mail.py --server http://myserver:8000 list
+rnoe-mail.py list --server http://myserver:8000
 ```
 
 ## Common Options

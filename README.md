@@ -2,7 +2,7 @@
 
 > 🙈 *"Read no evil"* — Secure email access for your AI agent, with prompt injection protection built in.
 
-This is an [OpenClaw](https://openclaw.ai) skill published on [ClawHub](https://clawhub.ai). Your agent can read, send, and manage emails without worrying about prompt injection attacks hiding in message content.
+This is an [OpenClaw](https://openclaw.ai) skill — your agent can read, send, and manage emails without you worrying about prompt injection attacks hiding in message content.
 
 ## Install
 
@@ -26,6 +26,8 @@ This skill connects to a [read-no-evil-mcp](https://github.com/thekie/read-no-ev
 - 👥 **Multiple accounts** — Connect as many email accounts as you need, each with its own permissions and rules
 - 🐍 **Nothing to install** — Works out of the box with no extra dependencies
 
+For the full feature set, head over to [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp).
+
 ## 🔐 Security
 
 Every email is scanned by a [DeBERTa-based ML model](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) before reaching your agent. Scanning is never skipped, even for trusted senders. Your credentials never leave the server.
@@ -38,11 +40,3 @@ Every email is scanned by a [DeBERTa-based ML model](https://huggingface.co/prot
 ## License
 
 Apache 2.0 — See [LICENSE](LICENSE)
-
----
-
-<p align="center">
-  <b>🙈 🙉 🙊</b><br>
-  <i>See no evil. Hear no evil. Speak no evil.</i><br>
-  <i>Read no evil.</i>
-</p>

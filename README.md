@@ -1,79 +1,117 @@
-# Clawbot Skill: read-no-evil-mcp
+# OpenClaw Skill: read-no-evil-mcp
 
-Secure email access for [Clawbot](https://github.com/clawbot/clawbot) with prompt injection protection.
+Secure email access for [OpenClaw](https://github.com/openclaw/openclaw) with prompt injection protection.
 
 Uses [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) to scan emails for prompt injection attacks before your AI agent sees them.
 
 ## Features
 
-- 📧 List, read, send, and move emails via IMAP/SMTP
-- 🛡️ Automatic prompt injection detection using ML
-- 🔒 Local inference — no data sent to external APIs
-- ⚙️ Configurable permissions per account
+- Secure email access: list, read, send, move, and delete emails
+- Automatic prompt injection detection (server-side ML scanning)
+- Full credential isolation — the AI agent never sees passwords or email server connections
+- Zero dependencies — uses only Python stdlib (3.8+)
+
+## Architecture
+
+This skill is a thin HTTP client that speaks the [MCP Streamable HTTP protocol](https://modelcontextprotocol.io/) to a read-no-evil-mcp server. All email operations, credential management, and prompt injection scanning happen on the server side.
+
+```
+OpenClaw Agent  -->  rnoe-mail.py (HTTP client)  -->  read-no-evil-mcp server  -->  IMAP/SMTP
+```
 
 ## Installation
 
-### Via ClawHub
+### Via OpenClaw Hub
 ```bash
-clawhub install read-no-evil-mcp
+openclaw install read-no-evil-mcp
 ```
 
 ### Manual
 ```bash
-git clone https://github.com/thekie/read-no-evil-clawbot-skill.git ~/.clawbot/skills/read-no-evil-mcp
-pip install "read-no-evil-mcp==0.2.0"
+git clone https://github.com/thekie/read-no-evil-openclaw-skill.git ~/.openclaw/skills/read-no-evil-mcp
 ```
 
-> **Note:** Skill version matches the required `read-no-evil-mcp` package version.
+No `pip install` required.
 
 ## Configuration
 
-### 1. Create config file
-
-Create `~/.config/read-no-evil-mcp/config.yaml`:
-
-```yaml
-accounts:
-  - id: "default"
-    type: "imap"
-    host: "mail.example.com"
-    port: 993
-    username: "you@example.com"
-    ssl: true
-    permissions:
-      read: true
-      send: false
-      delete: false
-      move: false
-    smtp_host: "mail.example.com"
-    smtp_port: 587
-    from_address: "you@example.com"
-    from_name: "Your Name"
-```
-
-### 2. Set credentials
-
-Create `~/.config/read-no-evil-mcp/.env`:
+Before starting the server, create a config file for your email accounts:
 
 ```bash
-RNOE_ACCOUNT_DEFAULT_PASSWORD=your-password
+# Interactive wizard — creates ~/.config/read-no-evil-mcp/config.yaml
+scripts/setup-config.py create
+
+# Add another account to existing config
+scripts/setup-config.py add
+
+# List configured accounts
+scripts/setup-config.py list
+
+# Remove an account
+scripts/setup-config.py remove <account-id>
+
+# Show full config
+scripts/setup-config.py show
 ```
 
-The environment variable format is `RNOE_ACCOUNT_{ACCOUNT_ID}_PASSWORD` (uppercase).
+The wizard includes provider presets for Gmail, Outlook, and Yahoo with auto-detected IMAP/SMTP settings. It will also offer to create a `.env` file with password placeholder variables.
+
+Passwords are never stored in the config file. They are passed as environment variables:
+```
+RNOE_ACCOUNT_<UPPERCASE_ID>_PASSWORD=your-app-password
+```
+
+## Server Setup
+
+You need a running read-no-evil-mcp server. Three options:
+
+### Option 1: Docker (recommended)
+
+Run the interactive setup script:
+
+```bash
+scripts/setup-server.sh
+```
+
+This will:
+1. Pull the official Docker image (`ghcr.io/thekie/read-no-evil-mcp:latest`)
+2. Prompt for your config file path and email credentials
+3. Start a container on port 8000
+
+### Option 2: Existing server
+
+If you already have a server running (locally or remotely), just point the skill at it:
+
+```bash
+# Local server on default port
+rnoe-mail.py list
+
+# Remote server
+rnoe-mail.py --server http://myserver:8000 list
+
+# Or set the env var
+export RNOE_SERVER_URL=http://myserver:8000
+rnoe-mail.py list
+```
+
+### Option 3: Run the server directly
+
+See the [read-no-evil-mcp docs](https://github.com/thekie/read-no-evil-mcp) for running the server without Docker.
 
 ## Usage
 
 ```bash
+# List accounts configured on the server
+rnoe-mail.py accounts
+
 # List recent emails
 rnoe-mail.py list
-
-# List with options
 rnoe-mail.py list --limit 10 --days 7
 
-# Read email (scanned for prompt injection!)
+# Read email (scanned for prompt injection)
 rnoe-mail.py read <uid>
 
-# Send email (requires send permission)
+# Send email
 rnoe-mail.py send --to "user@example.com" --subject "Hello" --body "Message"
 
 # List folders
@@ -81,40 +119,28 @@ rnoe-mail.py folders
 
 # Move email to folder
 rnoe-mail.py move <uid> --to "Archive"
+
+# Delete email
+rnoe-mail.py delete <uid>
 ```
 
-## Prompt Injection Detection
+## Server URL Resolution
 
-All emails are automatically scanned before content is shown:
+The server URL is resolved in this order:
 
-- **Safe email**: Content is displayed normally
-- **Injection detected**: Exit code 2, shows score and patterns
+1. `--server URL` CLI flag
+2. `RNOE_SERVER_URL` environment variable
+3. Default: `http://localhost:8000`
 
-The detection uses [ProtectAI's DeBERTa model](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) running locally.
+## Security
 
-## Permissions
-
-Configure what operations are allowed per account:
-
-| Permission | Description |
-|------------|-------------|
-| `read` | List and read emails |
-| `send` | Send emails via SMTP |
-| `delete` | Delete emails (use with caution!) |
-| `move` | Move emails between folders |
-
-All permissions default to `false` except `read`.
-
-## Security Notes
-
-- 🔐 Credentials stored locally, never transmitted
-- 🤖 ML model runs locally — no external API calls
-- ⚠️ Enable write permissions only when needed
-- 📝 Consider using app-specific passwords
+- **Credential isolation**: Email passwords and server connections live only on the MCP server. The AI agent and this skill never have access to them.
+- **Prompt injection protection**: All email content is scanned by the server's ML model before being returned to the client.
+- **HTTPS warning**: The script warns if you use plain HTTP with a non-localhost server.
 
 ## Credits
 
-- [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) — The underlying secure email library
+- [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) — The MCP server for secure email access
 - [ProtectAI](https://protectai.com/) — Prompt injection detection model
 
 ## License

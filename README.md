@@ -1,16 +1,8 @@
 # 🦞 read-no-evil-mcp
 
-**Secure email access for your AI agent — with prompt injection protection built in.**
+> 🙈 *"Read no evil"* — Secure email access for your AI agent, with prompt injection protection built in.
 
-Your [Clawbot](https://clawhub.ai) agent can read, send, and manage emails without worrying about prompt injection attacks hiding in message content.
-
-## Features
-
-- 📧 List, read, send, move, and delete emails via a secure gateway
-- 🛡️ Automatic prompt injection detection using ML — malicious emails are flagged before your agent sees them
-- 🔒 Full credential isolation — your passwords and email connections never touch the AI agent
-- ⚙️ Configurable permissions per account (read-only, send, delete, move)
-- 🐍 Zero dependencies — pure Python stdlib, no pip install needed
+This is an [OpenClaw](https://openclaw.ai) skill published on [ClawHub](https://clawhub.ai). Your agent can read, send, and manage emails without worrying about prompt injection attacks hiding in message content.
 
 ## Install
 
@@ -18,36 +10,25 @@ Your [Clawbot](https://clawhub.ai) agent can read, send, and manage emails witho
 clawhub install read-no-evil-mcp
 ```
 
-Requires a running [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) server (Docker recommended, see server repo for setup).
+This skill connects to a [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) server. You can point it at an existing server, or let the built-in setup script spin one up locally via Docker.
 
-## Usage
+## ✨ What You Get
 
-```bash
-# List configured email accounts
-rnoe-mail.py accounts
+- 📧 **Full email management** — Your agent can read, send, move, and delete emails across multiple accounts
+- 🛡️ **Prompt injection protection** — Every email is scanned before your agent sees it. Malicious content gets blocked automatically
+- 🔒 **Your credentials stay safe** — Passwords and email connections never touch the AI. Your agent only sees clean, sanitized content
+- 🔐 **You control what your agent can do** — Read-only by default, with optional send, delete, and move permissions per account. Lock it down to specific folders if you want
+- 📬 **Sender-based rules** — Set rules for known senders. Auto-trust your team, flag external contacts for confirmation, or hide noisy newsletters
+- 🎛️ **Custom agent guidance** — Tell your agent how to handle emails from different senders. For example, act on messages from your team right away but ask you first about external contacts
+- 🎚️ **Tune the sensitivity** — Dial detection up or down per account. Tighter for your work inbox, more relaxed for newsletters
+- ✉️ **Control who your agent can email** — Restrict outgoing emails to specific people or domains
+- 📎 **Attachments included** — Your agent can send emails with file attachments
+- 👥 **Multiple accounts** — Connect as many email accounts as you need, each with its own permissions and rules
+- 🐍 **Nothing to install** — Works out of the box with no extra dependencies
 
-# List recent emails
-rnoe-mail.py list --limit 10 --days 7
+## 🔐 Security
 
-# Read an email (scanned for prompt injection!)
-rnoe-mail.py read <uid>
-
-# Send an email
-rnoe-mail.py send --to "user@example.com" --subject "Hello" --body "Message"
-
-# List folders
-rnoe-mail.py folders
-
-# Move email to a folder
-rnoe-mail.py move <uid> --to "Archive"
-
-# Delete an email
-rnoe-mail.py delete <uid>
-```
-
-## Security
-
-All email content is scanned server-side by an ML model before reaching your agent. If a prompt injection is detected, the email is blocked and the script exits with code 2. Your email credentials never leave the server — the AI agent only sees sanitized content over HTTP.
+Every email is scanned by a [DeBERTa-based ML model](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) before reaching your agent. Scanning is never skipped, even for trusted senders. Your credentials never leave the server.
 
 ## Credits
 
@@ -57,3 +38,11 @@ All email content is scanned server-side by an ML model before reaching your age
 ## License
 
 Apache 2.0 — See [LICENSE](LICENSE)
+
+---
+
+<p align="center">
+  <b>🙈 🙉 🙊</b><br>
+  <i>See no evil. Hear no evil. Speak no evil.</i><br>
+  <i>Read no evil.</i>
+</p>

@@ -41,7 +41,7 @@ No `pip install` is required. The script uses only Python stdlib.
 2. If no config, create one and add an account:
    ```bash
    setup-config.py create
-   setup-config.py add --email user@example.com --host imap.example.com --smtp-host smtp.example.com --send --create-env
+   setup-config.py add --email user@example.com --host imap.example.com --create-env
    ```
 3. Ask the user to fill in the password in the `.env` file.
 4. Start the server:
@@ -57,7 +57,8 @@ Use `scripts/setup-config.py` to manage the server config file. All commands are
 | Scenario | Command |
 |----------|---------|
 | Create config skeleton | `setup-config.py create [--threshold 0.5] [--force]` |
-| Add an email account | `setup-config.py add --email user@example.com --host imap.example.com --smtp-host smtp.example.com [--id myaccount] [--send] [--delete] [--move] [--create-env]` |
+| Add a read-only account | `setup-config.py add --email user@example.com --host imap.example.com [--id myaccount] [--create-env]` |
+| Add a send-enabled account | `setup-config.py add --email user@example.com --host imap.example.com --smtp-host smtp.example.com --send [--delete] [--move] [--create-env]` |
 | Check what accounts are configured | `setup-config.py list` |
 | Remove an account | `setup-config.py remove <id>` |
 
@@ -74,9 +75,10 @@ Manage the server config file (`~/.config/read-no-evil-mcp/config.yaml`). No pip
 setup-config.py create
 setup-config.py create --threshold 0.3 --force
 
-# Add an account (--host and --smtp-host are required)
-setup-config.py add --email user@example.com \
-  --host imap.example.com --smtp-host smtp.example.com --send --create-env
+# Add a read-only account (no SMTP needed)
+setup-config.py add --email user@example.com --host imap.example.com --create-env
+
+# Add an account with send permission (--smtp-host required for --send)
 setup-config.py add --email user@example.com --id myaccount \
   --host imap.example.com --smtp-host smtp.example.com --send --delete --move
 

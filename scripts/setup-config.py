@@ -8,7 +8,7 @@ Designed for invocation by LLM agents (no interactive prompts).
 
 Usage:
     setup-config.py create [--threshold 0.5] [--force]
-    setup-config.py add --email USER@DOMAIN --host IMAP_HOST --smtp-host SMTP_HOST ...
+    setup-config.py add --email USER@DOMAIN --host IMAP_HOST [--smtp-host SMTP_HOST] ...
     setup-config.py remove <account_id>
     setup-config.py list
     setup-config.py show
@@ -148,7 +148,6 @@ def _parse_block(lines, pos, base_indent):
 
     indent, content = lines[pos]
 
-    # Determine if this is a list or dict block
     if content.startswith("- "):
         return _parse_list_block(lines, pos, base_indent)
     else:
@@ -236,7 +235,6 @@ def _parse_list_block(lines, pos, base_indent):
                 result.append({key: None})
                 pos += 1
         else:
-            # - scalar
             result.append(_parse_scalar(item_content))
             pos += 1
     return result, pos
@@ -336,7 +334,6 @@ def write_config(path, config):
             f.write(text)
         os.replace(tmp_path, path)
     except Exception:
-        # Clean up temp file on failure
         try:
             os.unlink(tmp_path)
         except OSError:
@@ -378,14 +375,21 @@ def build_account(args, existing_ids):
         print("Error: Account ID must be lowercase alphanumeric with hyphens only.", file=sys.stderr)
         sys.exit(1)
 
+    # SMTP is only required when --send is enabled
+    if args.send and not args.smtp_host:
+        print("Error: --smtp-host is required when --send is enabled.", file=sys.stderr)
+        sys.exit(1)
+
     account = {"id": account_id, "type": "imap"}
     account["host"] = args.host
     account["port"] = args.port
     account["ssl"] = not args.no_ssl
     account["username"] = email
-    account["smtp_host"] = args.smtp_host
-    account["smtp_port"] = args.smtp_port
-    account["smtp_ssl"] = args.smtp_ssl
+
+    if args.smtp_host:
+        account["smtp_host"] = args.smtp_host
+        account["smtp_port"] = args.smtp_port
+        account["smtp_ssl"] = args.smtp_ssl
 
     # Permissions (read is always on)
     account["permissions"] = {
@@ -395,7 +399,6 @@ def build_account(args, existing_ids):
         "move": args.move,
     }
 
-    # Per-account threshold
     if args.threshold is not None:
         account["protection"] = {"threshold": args.threshold}
 
@@ -543,7 +546,7 @@ def main():
     add_parser.add_argument("--id", default=None, help="Account ID (auto-generated from email if omitted)")
     add_parser.add_argument("--host", required=True, help="IMAP host (required)")
     add_parser.add_argument("--port", type=int, default=993, help="IMAP port (default: 993)")
-    add_parser.add_argument("--smtp-host", required=True, help="SMTP host (required)")
+    add_parser.add_argument("--smtp-host", default=None, help="SMTP host (required when --send is used)")
     add_parser.add_argument("--smtp-port", type=int, default=587, help="SMTP port (default: 587)")
     add_parser.add_argument("--no-ssl", action="store_true", default=False, help="Disable IMAP SSL")
     add_parser.add_argument("--smtp-ssl", action="store_true", default=False, help="Enable SMTP SSL")

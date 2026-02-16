@@ -1,120 +1,40 @@
-# Clawbot Skill: read-no-evil-mcp
+# 🦞 read-no-evil-mcp
 
-Secure email access for [Clawbot](https://github.com/clawbot/clawbot) with prompt injection protection.
+> 🙈 *"Read no evil"* — Secure email access for your AI agent, with prompt injection protection built in.
 
-Uses [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) to scan emails for prompt injection attacks before your AI agent sees them.
+This is an [OpenClaw](https://openclaw.ai) skill — your agent can read, send, and manage emails without you worrying about prompt injection attacks hiding in message content.
 
-## Features
+## Install
 
-- 📧 List, read, send, and move emails via IMAP/SMTP
-- 🛡️ Automatic prompt injection detection using ML
-- 🔒 Local inference — no data sent to external APIs
-- ⚙️ Configurable permissions per account
-
-## Installation
-
-### Via ClawHub
 ```bash
 clawhub install read-no-evil-mcp
 ```
 
-### Manual
-```bash
-git clone https://github.com/thekie/read-no-evil-clawbot-skill.git ~/.clawbot/skills/read-no-evil-mcp
-pip install "read-no-evil-mcp==0.2.0"
-```
+This skill connects to a [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) server. You can point it at an existing server, or let the built-in setup script spin one up locally via Docker.
 
-> **Note:** Skill version matches the required `read-no-evil-mcp` package version.
+## ✨ What You Get
 
-## Configuration
+- 📧 **Full email management** — Your agent can read, send, move, and delete emails across multiple accounts
+- 🛡️ **Prompt injection protection** — Every email is scanned before your agent sees it. Malicious content gets blocked automatically
+- 🔒 **Your credentials stay safe** — Passwords and email connections never touch the AI. Your agent only sees clean, sanitized content
+- 🔐 **You control what your agent can do** — Read-only by default, with optional send, delete, and move permissions per account. Lock it down to specific folders if you want
+- 📬 **Sender-based rules** — Set rules for known senders. Auto-trust your team, flag external contacts for confirmation, or hide noisy newsletters
+- 🎛️ **Custom agent guidance** — Tell your agent how to handle emails from different senders. For example, act on messages from your team right away but ask you first about external contacts
+- 🎚️ **Tune the sensitivity** — Dial detection up or down per account. Tighter for your work inbox, more relaxed for newsletters
+- ✉️ **Control who your agent can email** — Restrict outgoing emails to specific people or domains
+- 📎 **Attachments included** — Your agent can send emails with file attachments
+- 👥 **Multiple accounts** — Connect as many email accounts as you need, each with its own permissions and rules
+- 🐍 **Nothing to install** — Works out of the box with no extra dependencies
 
-### 1. Create config file
+For the full feature set, head over to [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp).
 
-Create `~/.config/read-no-evil-mcp/config.yaml`:
+## 🔐 Security
 
-```yaml
-accounts:
-  - id: "default"
-    type: "imap"
-    host: "mail.example.com"
-    port: 993
-    username: "you@example.com"
-    ssl: true
-    permissions:
-      read: true
-      send: false
-      delete: false
-      move: false
-    smtp_host: "mail.example.com"
-    smtp_port: 587
-    from_address: "you@example.com"
-    from_name: "Your Name"
-```
-
-### 2. Set credentials
-
-Create `~/.config/read-no-evil-mcp/.env`:
-
-```bash
-RNOE_ACCOUNT_DEFAULT_PASSWORD=your-password
-```
-
-The environment variable format is `RNOE_ACCOUNT_{ACCOUNT_ID}_PASSWORD` (uppercase).
-
-## Usage
-
-```bash
-# List recent emails
-rnoe-mail.py list
-
-# List with options
-rnoe-mail.py list --limit 10 --days 7
-
-# Read email (scanned for prompt injection!)
-rnoe-mail.py read <uid>
-
-# Send email (requires send permission)
-rnoe-mail.py send --to "user@example.com" --subject "Hello" --body "Message"
-
-# List folders
-rnoe-mail.py folders
-
-# Move email to folder
-rnoe-mail.py move <uid> --to "Archive"
-```
-
-## Prompt Injection Detection
-
-All emails are automatically scanned before content is shown:
-
-- **Safe email**: Content is displayed normally
-- **Injection detected**: Exit code 2, shows score and patterns
-
-The detection uses [ProtectAI's DeBERTa model](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) running locally.
-
-## Permissions
-
-Configure what operations are allowed per account:
-
-| Permission | Description |
-|------------|-------------|
-| `read` | List and read emails |
-| `send` | Send emails via SMTP |
-| `delete` | Delete emails (use with caution!) |
-| `move` | Move emails between folders |
-
-All permissions default to `false` except `read`.
-
-## Security Notes
-
-- 🔐 Credentials stored locally, never transmitted
-- 🤖 ML model runs locally — no external API calls
-- ⚠️ Enable write permissions only when needed
-- 📝 Consider using app-specific passwords
+Every email is scanned by a [DeBERTa-based ML model](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2) before reaching your agent. Scanning is never skipped, even for trusted senders. Your credentials never leave the server.
 
 ## Credits
 
-- [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) — The underlying secure email library
+- [read-no-evil-mcp](https://github.com/thekie/read-no-evil-mcp) — The MCP server powering secure email access
 - [ProtectAI](https://protectai.com/) — Prompt injection detection model
 
 ## License

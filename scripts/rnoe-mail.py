@@ -1,271 +1,319 @@
 #!/usr/bin/env python3
 """
-CLI wrapper for read-no-evil-mcp secure email access.
-Provides prompt injection protection for email reading.
+MCP HTTP client for read-no-evil-mcp secure email access.
+Speaks the MCP Streamable HTTP protocol to a remote server.
+
+Zero dependencies — uses only Python stdlib (3.8+).
 
 Usage:
+    rnoe-mail.py accounts
     rnoe-mail.py list [--limit N] [--days N]
     rnoe-mail.py read <uid>
     rnoe-mail.py send --to ADDR --subject SUBJ --body BODY [--cc ADDR]
     rnoe-mail.py folders
     rnoe-mail.py move <uid> --to FOLDER
+    rnoe-mail.py delete <uid>
 """
 
 import argparse
+import json
 import os
 import sys
-from datetime import timedelta
-from pathlib import Path
-
-import yaml
-from pydantic import SecretStr
-
-import read_no_evil_mcp as rnoe
-from read_no_evil_mcp.accounts.permissions import AccountPermissions
+import urllib.error
+import urllib.request
 
 
-def load_config():
-    """Load config from ~/.config/read-no-evil-mcp/config.yaml"""
-    config_path = Path.home() / ".config" / "read-no-evil-mcp" / "config.yaml"
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config not found: {config_path}")
-    
-    with open(config_path) as f:
-        return yaml.safe_load(f)
+class McpClient:
+    """Minimal MCP Streamable HTTP client using only stdlib."""
 
+    def __init__(self, server_url):
+        self.server_url = server_url.rstrip("/")
+        self.endpoint = self.server_url + "/mcp"
+        self.session_id = None
+        self._id_counter = 0
 
-def get_password(account_id: str) -> str:
-    """Get password from environment variable."""
-    env_key = f"RNOE_ACCOUNT_{account_id.upper()}_PASSWORD"
-    password = os.environ.get(env_key)
-    if not password:
-        # Try loading from .env file
-        env_file = Path.home() / ".config" / "read-no-evil-mcp" / ".env"
-        if env_file.exists():
-            with open(env_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith(f"{env_key}="):
-                        password = line.split("=", 1)[1].strip('"\'')
-                        break
-    if not password:
-        raise ValueError(f"Password not found. Set {env_key} or add to .env")
-    return password
+    def _next_id(self):
+        self._id_counter += 1
+        return self._id_counter
 
-
-def create_mailbox(account_config: dict) -> rnoe.SecureMailbox:
-    """Create a SecureMailbox from account config."""
-    account_id = account_config["id"]
-    password = get_password(account_id)
-    
-    # Create IMAP config
-    imap_config = rnoe.IMAPConfig(
-        host=account_config["host"],
-        port=account_config["port"],
-        username=account_config["username"],
-        password=SecretStr(password),
-        ssl=account_config.get("ssl", True),
-    )
-    
-    # Create SMTP config if available
-    smtp_config = None
-    if "smtp_host" in account_config:
-        from read_no_evil_mcp.models import SMTPConfig
-        smtp_config = SMTPConfig(
-            host=account_config["smtp_host"],
-            port=account_config.get("smtp_port", 587),
-            username=account_config["username"],
-            password=SecretStr(password),
-            ssl=account_config.get("smtp_ssl", False),
+    def _post(self, payload):
+        """POST JSON to the MCP endpoint. Returns (parsed_body, headers)."""
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            self.endpoint,
+            data=data,
+            headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
         )
-    
-    # Create connector
-    connector = rnoe.IMAPConnector(imap_config, smtp_config)
-    
-    # Create permissions
-    perms = account_config.get("permissions", {})
-    permissions = AccountPermissions(
-        read=perms.get("read", True),
-        delete=perms.get("delete", False),
-        send=perms.get("send", False),
-        move=perms.get("move", False),
-    )
-    
-    # Create protection service with scanner
-    protection = rnoe.ProtectionService(scanner=rnoe.HeuristicScanner())
-    
-    # Create secure mailbox
-    return rnoe.SecureMailbox(
-        connector=connector,
-        permissions=permissions,
-        protection=protection,
-        from_address=account_config.get("from_address"),
-        from_name=account_config.get("from_name"),
-    )
+        if self.session_id:
+            req.add_header("Mcp-Session-Id", self.session_id)
+
+        try:
+            resp = urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"HTTP {e.code}: {body}")
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Cannot connect to {self.server_url}: {e.reason}")
+
+        headers = resp.headers
+        content_type = headers.get("Content-Type", "")
+        raw = resp.read().decode("utf-8")
+
+        if "text/event-stream" in content_type:
+            parsed = self._parse_sse(raw)
+        else:
+            parsed = json.loads(raw) if raw.strip() else {}
+
+        return parsed, headers
+
+    @staticmethod
+    def _parse_sse(raw):
+        """Parse SSE stream, return the last JSON-RPC message with a result or error."""
+        last_message = None
+        for line in raw.splitlines():
+            if line.startswith("data:"):
+                payload = line[len("data:"):].strip()
+                if payload:
+                    try:
+                        msg = json.loads(payload)
+                        if "result" in msg or "error" in msg:
+                            last_message = msg
+                    except json.JSONDecodeError:
+                        continue
+        return last_message or {}
+
+    def initialize(self):
+        """Send MCP initialize + initialized notification."""
+        init_req = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "rnoe-mail", "version": "0.3.0"},
+            },
+        }
+        resp, headers = self._post(init_req)
+        sid = headers.get("Mcp-Session-Id")
+        if sid:
+            self.session_id = sid
+
+        # Send initialized notification (no id = notification)
+        notif = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+        try:
+            self._post(notif)
+        except Exception:
+            pass  # Notifications may return empty or 204
+
+    def call_tool(self, name, arguments=None):
+        """Call an MCP tool. Returns (text, is_error)."""
+        req = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments or {}},
+        }
+        resp, _ = self._post(req)
+
+        if "error" in resp:
+            err = resp["error"]
+            return err.get("message", str(err)), True
+
+        result = resp.get("result", {})
+        is_error = result.get("isError", False)
+
+        # Extract text from content array
+        content = result.get("content", [])
+        texts = []
+        for item in content:
+            if item.get("type") == "text":
+                texts.append(item.get("text", ""))
+        text = "\n".join(texts) if texts else ""
+        return text, is_error
+
+    def close(self):
+        """No persistent connection to close with HTTP transport."""
+        pass
 
 
-def cmd_list(mailbox: rnoe.SecureMailbox, args):
-    """List emails in inbox."""
-    mailbox.connect()
-    try:
-        emails = mailbox.fetch_emails(
-            folder=args.folder or "INBOX",
-            lookback=timedelta(days=args.days),
-            limit=args.limit,
-        )
-        
-        for email_summary in emails:
-            att = "📎" if email_summary.has_attachments else "  "
-            from_addr = str(email_summary.sender) if email_summary.sender else "(unknown)"
-            subject = email_summary.subject or "(no subject)"
-            date = email_summary.date.strftime("%Y-%m-%d %H:%M") if email_summary.date else ""
-            print(f"{att} {email_summary.uid:>4} | {from_addr[:40]:<40} | {subject[:45]:<45} | {date}")
-    finally:
-        mailbox.disconnect()
+def detect_prompt_injection(text):
+    """Check if server response indicates a blocked prompt injection."""
+    if not text:
+        return False
+    lower = text.lower()
+    return "blocked:" in lower and "prompt injection" in lower
 
 
-def cmd_read(mailbox: rnoe.SecureMailbox, args):
-    """Read a specific email with prompt injection scanning."""
-    mailbox.connect()
-    try:
-        email_obj = mailbox.get_email(
-            folder=args.folder or "INBOX",
-            uid=args.uid,
-        )
-        
-        if not email_obj:
-            print(f"Email with UID {args.uid} not found", file=sys.stderr)
-            sys.exit(1)
-        
-        print(f"From: {email_obj.sender}")
-        print(f"To: {', '.join(str(r) for r in (email_obj.recipients or []))}")
-        print(f"Date: {email_obj.date}")
-        print(f"Subject: {email_obj.subject}")
-        
-        if email_obj.attachments:
-            print(f"\nAttachments: {len(email_obj.attachments)}")
-            for att in email_obj.attachments:
-                print(f"  📎 {att.filename} ({att.content_type})")
-        
-        print("\n--- Body ---")
-        print(email_obj.body or "(empty)")
-        
-    except rnoe.PromptInjectionError as e:
-        print(f"⚠️  PROMPT INJECTION DETECTED!", file=sys.stderr)
-        print(f"Score: {e.scan_result.score:.2f}", file=sys.stderr)
-        if e.scan_result.detected_patterns:
-            print(f"Patterns: {e.scan_result.detected_patterns}", file=sys.stderr)
+def cmd_accounts(client, _args):
+    text, is_error = client.call_tool("list_accounts")
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
+
+
+def cmd_list(client, args):
+    arguments = {"account": args.account, "folder": args.folder}
+    if args.limit:
+        arguments["limit"] = args.limit
+    if args.days:
+        arguments["days_back"] = args.days
+    text, is_error = client.call_tool("list_emails", arguments)
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
+
+
+def cmd_read(client, args):
+    arguments = {"account": args.account, "folder": args.folder, "uid": args.uid}
+    text, is_error = client.call_tool("get_email", arguments)
+    if is_error:
+        if detect_prompt_injection(text):
+            print(text, file=sys.stderr)
+            sys.exit(2)
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    if detect_prompt_injection(text):
+        print(text, file=sys.stderr)
         sys.exit(2)
-    finally:
-        mailbox.disconnect()
+    print(text)
 
 
-def cmd_send(mailbox: rnoe.SecureMailbox, args):
-    """Send an email."""
-    mailbox.connect()
-    try:
-        cc = args.cc.split(",") if args.cc else None
-        
-        mailbox.send_email(
-            to=args.to.split(","),
-            subject=args.subject,
-            body=args.body,
-            cc=cc,
-        )
-        print(f"✅ Email sent to {args.to}")
-    finally:
-        mailbox.disconnect()
+def cmd_send(client, args):
+    arguments = {
+        "account": args.account,
+        "to": args.to,
+        "subject": args.subject,
+        "body": args.body,
+    }
+    if args.cc:
+        arguments["cc"] = args.cc
+    text, is_error = client.call_tool("send_email", arguments)
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
 
 
-def cmd_folders(mailbox: rnoe.SecureMailbox, args):
-    """List available folders."""
-    mailbox.connect()
-    try:
-        folders = mailbox.list_folders()
-        for folder in folders:
-            print(f"📁 {folder.name}")
-    finally:
-        mailbox.disconnect()
+def cmd_folders(client, args):
+    arguments = {"account": args.account}
+    text, is_error = client.call_tool("list_folders", arguments)
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
 
 
-def cmd_move(mailbox: rnoe.SecureMailbox, args):
-    """Move email to another folder."""
-    mailbox.connect()
-    try:
-        mailbox.move_email(
-            folder=args.folder or "INBOX",
-            uid=args.uid,
-            target_folder=args.to,
-        )
-        print(f"✅ Email {args.uid} moved to {args.to}")
-    finally:
-        mailbox.disconnect()
+def cmd_move(client, args):
+    arguments = {
+        "account": args.account,
+        "folder": args.folder,
+        "uid": args.uid,
+        "target_folder": args.to,
+    }
+    text, is_error = client.call_tool("move_email", arguments)
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
+
+
+def cmd_delete(client, args):
+    arguments = {"account": args.account, "folder": args.folder, "uid": args.uid}
+    text, is_error = client.call_tool("delete_email", arguments)
+    if is_error:
+        print(text, file=sys.stderr)
+        sys.exit(1)
+    print(text)
+
+
+def resolve_server_url(args):
+    """Resolve server URL from CLI flag, env var, or default."""
+    if args.server:
+        return args.server
+    url = os.environ.get("RNOE_SERVER_URL")
+    if url:
+        return url
+    return "http://localhost:8000"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Secure email access with prompt injection protection")
+    parser = argparse.ArgumentParser(
+        description="Secure email access via MCP server with prompt injection protection"
+    )
+    parser.add_argument("--server", help="MCP server URL (default: http://localhost:8000)")
     parser.add_argument("--account", "-a", default="default", help="Account ID (default: default)")
     parser.add_argument("--folder", "-f", default="INBOX", help="Folder (default: INBOX)")
-    
+
     subparsers = parser.add_subparsers(dest="command", required=True)
-    
+
+    # accounts
+    subparsers.add_parser("accounts", help="List configured accounts")
+
     # list
     list_parser = subparsers.add_parser("list", help="List emails")
-    list_parser.add_argument("--limit", "-n", type=int, default=20, help="Max emails to list")
+    list_parser.add_argument("--limit", "-n", type=int, default=20, help="Max emails (default: 20)")
     list_parser.add_argument("--days", "-d", type=int, default=30, help="Lookback days (default: 30)")
-    
+
     # read
     read_parser = subparsers.add_parser("read", help="Read an email")
     read_parser.add_argument("uid", type=int, help="Email UID")
-    
+
     # send
     send_parser = subparsers.add_parser("send", help="Send an email")
     send_parser.add_argument("--to", required=True, help="Recipient(s), comma-separated")
     send_parser.add_argument("--subject", "-s", required=True, help="Subject")
     send_parser.add_argument("--body", "-b", required=True, help="Body text")
     send_parser.add_argument("--cc", help="CC recipient(s), comma-separated")
-    
+
     # folders
     subparsers.add_parser("folders", help="List folders")
-    
+
     # move
     move_parser = subparsers.add_parser("move", help="Move email to folder")
     move_parser.add_argument("uid", type=int, help="Email UID")
     move_parser.add_argument("--to", required=True, help="Target folder")
-    
+
+    # delete
+    delete_parser = subparsers.add_parser("delete", help="Delete an email")
+    delete_parser.add_argument("uid", type=int, help="Email UID")
+
     args = parser.parse_args()
-    
-    # Load config and create mailbox
-    config = load_config()
-    account_config = None
-    for acc in config.get("accounts", []):
-        if acc["id"] == args.account:
-            account_config = acc
-            break
-    
-    if not account_config:
-        print(f"Account '{args.account}' not found in config", file=sys.stderr)
+
+    server_url = resolve_server_url(args)
+
+    client = McpClient(server_url)
+    try:
+        client.initialize()
+    except ConnectionError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-    
-    mailbox = create_mailbox(account_config)
-    
-    # Dispatch command
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     commands = {
+        "accounts": cmd_accounts,
         "list": cmd_list,
         "read": cmd_read,
         "send": cmd_send,
         "folders": cmd_folders,
         "move": cmd_move,
+        "delete": cmd_delete,
     }
-    
+
     try:
-        commands[args.command](mailbox, args)
-    except rnoe.PromptInjectionError as e:
-        print(f"⚠️  PROMPT INJECTION DETECTED!", file=sys.stderr)
-        sys.exit(2)
-    except Exception as e:
+        commands[args.command](client, args)
+    except ConnectionError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":

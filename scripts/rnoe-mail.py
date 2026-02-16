@@ -6,13 +6,19 @@ Speaks the MCP Streamable HTTP protocol to a remote server.
 Zero dependencies — uses only Python stdlib (3.8+).
 
 Usage:
-    rnoe-mail.py accounts
-    rnoe-mail.py list [--limit N] [--days N]
-    rnoe-mail.py read <uid>
-    rnoe-mail.py send --to ADDR --subject SUBJ --body BODY [--cc ADDR]
-    rnoe-mail.py folders
-    rnoe-mail.py move <uid> --to FOLDER
-    rnoe-mail.py delete <uid>
+    rnoe-mail.py [--server URL] [--account ID] [--folder F] <command> [args]
+    rnoe-mail.py <command> [--server URL] [--account ID] [--folder F] [args]
+
+Global options (--server, --account, --folder) can appear before or after the command.
+
+Commands:
+    accounts                            List configured accounts
+    list [--limit N] [--days N]         List emails
+    read <uid>                          Read an email
+    send --to ADDR --subject SUBJ --body BODY [--cc ADDR]  Send an email
+    folders                             List folders
+    move <uid> --to FOLDER              Move email to folder
+    delete <uid>                        Delete an email
 """
 
 import argparse
@@ -240,13 +246,19 @@ def resolve_server_url(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Secure email access via MCP server with prompt injection protection"
-    )
-    parser.add_argument("--server", help="MCP server URL (default: http://localhost:8000)")
-    parser.add_argument("--account", "-a", default="default", help="Account ID (default: default)")
-    parser.add_argument("--folder", "-f", default="INBOX", help="Folder (default: INBOX)")
+    # First pass: extract global options, leaving the rest for subcommand parsing
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument("--server", help="MCP server URL (default: http://localhost:8000)")
+    global_parser.add_argument("--account", "-a", default="default", help="Account ID (default: default)")
+    global_parser.add_argument("--folder", "-f", default="INBOX", help="Folder (default: INBOX)")
 
+    global_args, remaining = global_parser.parse_known_args()
+
+    # Second pass: parse subcommand and its specific args
+    parser = argparse.ArgumentParser(
+        description="Secure email access via MCP server with prompt injection protection",
+        parents=[global_parser],
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # accounts
@@ -280,7 +292,13 @@ def main():
     delete_parser = subparsers.add_parser("delete", help="Delete an email")
     delete_parser.add_argument("uid", type=int, help="Email UID")
 
-    args = parser.parse_args()
+    args = parser.parse_args(remaining)
+
+    # Merge back global options captured in the first pass (before the subcommand)
+    for attr in ("server", "account", "folder"):
+        first_pass_val = getattr(global_args, attr)
+        if first_pass_val != global_parser.get_default(attr):
+            setattr(args, attr, first_pass_val)
 
     server_url = resolve_server_url(args)
 

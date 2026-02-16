@@ -184,12 +184,12 @@ def cmd_read(client, args):
 def cmd_send(client, args):
     arguments = {
         "account": args.account,
-        "to": args.to,
+        "to": [x.strip() for x in args.to.split(",")],
         "subject": args.subject,
         "body": args.body,
     }
     if args.cc:
-        arguments["cc"] = args.cc
+        arguments["cc"] = [x.strip() for x in args.cc.split(",")]
     text, is_error = client.call_tool("send_email", arguments)
     if is_error:
         print(text, file=sys.stderr)

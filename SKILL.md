@@ -124,6 +124,7 @@ rnoe-mail.py read <uid>
 
 # Send email
 rnoe-mail.py send --to "user@example.com" --subject "Hello" --body "Message"
+rnoe-mail.py send --to "user1@example.com, user2@example.com" --cc "cc@example.com" --subject "Hello" --body "Message"
 
 # List folders
 rnoe-mail.py folders

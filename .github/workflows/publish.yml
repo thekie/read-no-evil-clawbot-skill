@@ -1,4 +1,4 @@
-name: Publish to OpenClaw Hub
+name: Publish to ClawHub
 
 on:
   release:
@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install OpenClaw Hub CLI
-        run: npm install -g openclaw
+      - name: Install ClawHub CLI
+        run: npm install -g clawhub
 
       - name: Determine version
         id: version
@@ -35,12 +35,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
 
-      - name: Publish to OpenClaw Hub
+      - name: Publish to ClawHub
         env:
-          OPENCLAW_TOKEN: ${{ secrets.OPENCLAW_TOKEN }}
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
         run: |
-          openclaw login --token "$OPENCLAW_TOKEN" --no-browser
-          openclaw publish . \
+          clawhub login --token "$CLAWHUB_TOKEN" --no-browser
+          clawhub publish . \
             --slug read-no-evil-mcp \
             --name "read-no-evil-mcp" \
             --version "${{ steps.version.outputs.version }}" \

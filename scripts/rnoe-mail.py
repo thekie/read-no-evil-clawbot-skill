@@ -116,7 +116,6 @@ class McpClient:
         }
         resp, _ = self._post(req)
 
-        # Handle JSON-RPC error
         if "error" in resp:
             err = resp["error"]
             return err.get("message", str(err)), True
@@ -240,21 +239,6 @@ def resolve_server_url(args):
     return "http://localhost:8000"
 
 
-def warn_non_localhost_http(url):
-    """Warn if using plain HTTP with a non-localhost server."""
-    if not url.startswith("http://"):
-        return
-    from urllib.parse import urlparse
-    parsed = urlparse(url)
-    host = parsed.hostname or ""
-    if host not in ("localhost", "127.0.0.1", "::1", "[::1]"):
-        print(
-            f"Warning: Using unencrypted HTTP with non-localhost server ({host}). "
-            "Consider using HTTPS.",
-            file=sys.stderr,
-        )
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Secure email access via MCP server with prompt injection protection"
@@ -299,7 +283,6 @@ def main():
     args = parser.parse_args()
 
     server_url = resolve_server_url(args)
-    warn_non_localhost_http(server_url)
 
     client = McpClient(server_url)
     try:

@@ -41,7 +41,7 @@ No `pip install` is required. The script uses only Python stdlib.
 2. If no config, create one and add an account:
    ```bash
    setup-config.py create
-   setup-config.py add --email user@gmail.com --send --create-env
+   setup-config.py add --email user@example.com --host imap.example.com --smtp-host smtp.example.com --send --create-env
    ```
 3. Ask the user to fill in the password in the `.env` file.
 4. Start the server:
@@ -57,7 +57,7 @@ Use `scripts/setup-config.py` to manage the server config file. All commands are
 | Scenario | Command |
 |----------|---------|
 | Create config skeleton | `setup-config.py create [--threshold 0.5] [--force]` |
-| Add an email account | `setup-config.py add --email user@gmail.com [--id gmail] [--send] [--delete] [--move] [--create-env]` |
+| Add an email account | `setup-config.py add --email user@example.com --host imap.example.com --smtp-host smtp.example.com [--id myaccount] [--send] [--delete] [--move] [--create-env]` |
 | Check what accounts are configured | `setup-config.py list` |
 | Remove an account | `setup-config.py remove <id>` |
 
@@ -74,13 +74,11 @@ Manage the server config file (`~/.config/read-no-evil-mcp/config.yaml`). No pip
 setup-config.py create
 setup-config.py create --threshold 0.3 --force
 
-# Add an account (provider auto-detected from email domain)
-setup-config.py add --email user@gmail.com --send --create-env
-setup-config.py add --email user@gmail.com --id gmail --send --delete --move
-
-# Add a generic IMAP account
-setup-config.py add --email user@example.com --provider generic \
-  --imap-host imap.example.com --smtp-host smtp.example.com --send
+# Add an account (--host and --smtp-host are required)
+setup-config.py add --email user@example.com \
+  --host imap.example.com --smtp-host smtp.example.com --send --create-env
+setup-config.py add --email user@example.com --id myaccount \
+  --host imap.example.com --smtp-host smtp.example.com --send --delete --move
 
 # Remove an account
 setup-config.py remove <account-id>
@@ -94,8 +92,6 @@ setup-config.py show
 # Use a custom config path
 setup-config.py --config /path/to/config.yaml create
 ```
-
-Provider presets are included for Gmail, Outlook, and Yahoo. The provider is auto-detected from the email domain and IMAP/SMTP settings are pre-filled.
 
 ## Server Setup
 
@@ -165,5 +161,4 @@ All emails are automatically scanned by the MCP server:
 
 - Credentials are managed by the MCP server, never by this skill or the AI agent
 - The skill communicates with the server over HTTP — use HTTPS for non-localhost connections
-- The script warns on stderr if using plain HTTP with a non-localhost server
 - Prompt injection scanning happens server-side using ML models

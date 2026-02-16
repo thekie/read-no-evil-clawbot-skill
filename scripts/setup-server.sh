@@ -5,7 +5,7 @@ set -euo pipefail
 # Pulls the official image, loads credentials from .env, and starts the server.
 # Designed for invocation by LLM agents (no interactive prompts).
 
-IMAGE="ghcr.io/thekie/read-no-evil-mcp:latest"
+IMAGE="ghcr.io/thekie/read-no-evil-mcp:0.3"
 
 # --- Defaults ---
 CONFIG=""

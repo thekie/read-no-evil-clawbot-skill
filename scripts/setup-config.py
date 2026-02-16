@@ -8,7 +8,7 @@ Designed for invocation by LLM agents (no interactive prompts).
 
 Usage:
     setup-config.py create [--threshold 0.5] [--force]
-    setup-config.py add --email USER@DOMAIN [--id ID] [--provider PROVIDER] ...
+    setup-config.py add --email USER@DOMAIN --host IMAP_HOST --smtp-host SMTP_HOST ...
     setup-config.py remove <account_id>
     setup-config.py list
     setup-config.py show
@@ -28,51 +28,6 @@ DEFAULT_CONFIG = os.path.join(
     "read-no-evil-mcp",
     "config.yaml",
 )
-
-PROVIDERS = {
-    "gmail": {
-        "label": "Gmail",
-        "host": "imap.gmail.com",
-        "port": 993,
-        "ssl": True,
-        "smtp_host": "smtp.gmail.com",
-        "smtp_port": 587,
-        "smtp_ssl": False,
-        "sent_folder": "[Gmail]/Sent Mail",
-    },
-    "outlook": {
-        "label": "Outlook / Hotmail",
-        "host": "imap-mail.outlook.com",
-        "port": 993,
-        "ssl": True,
-        "smtp_host": "smtp-mail.outlook.com",
-        "smtp_port": 587,
-        "smtp_ssl": False,
-    },
-    "yahoo": {
-        "label": "Yahoo Mail",
-        "host": "imap.mail.yahoo.com",
-        "port": 993,
-        "ssl": True,
-        "smtp_host": "smtp.mail.yahoo.com",
-        "smtp_port": 587,
-        "smtp_ssl": False,
-    },
-    "generic": {
-        "label": "Generic IMAP (provide host details via flags)",
-    },
-}
-
-# Domain to provider key mapping
-DOMAIN_PROVIDERS = {
-    "gmail.com": "gmail",
-    "googlemail.com": "gmail",
-    "outlook.com": "outlook",
-    "hotmail.com": "outlook",
-    "live.com": "outlook",
-    "yahoo.com": "yahoo",
-    "ymail.com": "yahoo",
-}
 
 ACCOUNT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
@@ -375,7 +330,6 @@ def write_config(path, config):
     if parent:
         os.makedirs(parent, exist_ok=True)
     text = dump_yaml(config)
-    # Atomic write: write to temp file then rename
     fd, tmp_path = tempfile.mkstemp(dir=parent, suffix=".yaml.tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -395,9 +349,7 @@ def write_config(path, config):
 def suggest_account_id(email, existing_ids):
     """Suggest account ID from email address."""
     local = email.split("@")[0]
-    domain = email.split("@")[1].split(".")[0]
-    candidate = domain if domain in ("gmail", "outlook", "yahoo", "hotmail") else local
-    candidate = re.sub(r"[^a-z0-9-]", "", candidate.lower())
+    candidate = re.sub(r"[^a-z0-9-]", "", local.lower())
     if not candidate:
         candidate = "default"
     if candidate not in existing_ids:
@@ -408,22 +360,14 @@ def suggest_account_id(email, existing_ids):
     return candidate
 
 
-def detect_provider(email):
-    """Auto-detect provider from email domain."""
-    domain = email.split("@")[-1].lower()
-    return DOMAIN_PROVIDERS.get(domain)
-
-
 def build_account(args, existing_ids):
     """Build an account dict from CLI flags. Validates and errors on missing fields."""
     email = args.email
 
-    # Validate email
     if "@" not in email or "." not in email.split("@")[-1]:
         print(f"Error: Invalid email address: {email}", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve account ID
     account_id = args.id if args.id else suggest_account_id(email, existing_ids)
     account_id = account_id.lower()
 
@@ -434,41 +378,14 @@ def build_account(args, existing_ids):
         print("Error: Account ID must be lowercase alphanumeric with hyphens only.", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve provider
-    provider_key = args.provider if args.provider else detect_provider(email)
-    if provider_key is None:
-        provider_key = "generic"
-    if provider_key not in PROVIDERS:
-        print(f"Error: Unknown provider '{provider_key}'. Choose from: {', '.join(PROVIDERS.keys())}", file=sys.stderr)
-        sys.exit(1)
-
-    preset = PROVIDERS[provider_key]
     account = {"id": account_id, "type": "imap"}
-
-    if provider_key == "generic":
-        if not args.imap_host:
-            print("Error: --imap-host is required for generic provider.", file=sys.stderr)
-            sys.exit(1)
-        if not args.smtp_host:
-            print("Error: --smtp-host is required for generic provider.", file=sys.stderr)
-            sys.exit(1)
-        account["host"] = args.imap_host
-        account["port"] = args.imap_port
-        account["ssl"] = not args.no_ssl
-        account["username"] = email
-        account["smtp_host"] = args.smtp_host
-        account["smtp_port"] = args.smtp_port
-        account["smtp_ssl"] = args.smtp_ssl
-    else:
-        account["host"] = preset["host"]
-        account["port"] = preset["port"]
-        account["ssl"] = preset["ssl"]
-        account["username"] = email
-        account["smtp_host"] = preset["smtp_host"]
-        account["smtp_port"] = preset["smtp_port"]
-        account["smtp_ssl"] = preset["smtp_ssl"]
-        if "sent_folder" in preset:
-            account["sent_folder"] = preset["sent_folder"]
+    account["host"] = args.host
+    account["port"] = args.port
+    account["ssl"] = not args.no_ssl
+    account["username"] = email
+    account["smtp_host"] = args.smtp_host
+    account["smtp_port"] = args.smtp_port
+    account["smtp_ssl"] = args.smtp_ssl
 
     # Permissions (read is always on)
     account["permissions"] = {
@@ -507,7 +424,6 @@ def create_env_file(config_path, account_ids):
         val = existing_vars.get(var_name, "your-app-password-here")
         new_lines.append(f"{var_name}={val}")
 
-    # Atomic write
     parent = os.path.dirname(env_path)
     fd, tmp_path = tempfile.mkstemp(dir=parent, suffix=".env.tmp")
     try:
@@ -625,17 +541,16 @@ def main():
     add_parser = subparsers.add_parser("add", help="Add an account")
     add_parser.add_argument("--email", required=True, help="Email address (required)")
     add_parser.add_argument("--id", default=None, help="Account ID (auto-generated from email if omitted)")
-    add_parser.add_argument("--provider", default=None, help="Provider: gmail, outlook, yahoo, generic (auto-detected if omitted)")
+    add_parser.add_argument("--host", required=True, help="IMAP host (required)")
+    add_parser.add_argument("--port", type=int, default=993, help="IMAP port (default: 993)")
+    add_parser.add_argument("--smtp-host", required=True, help="SMTP host (required)")
+    add_parser.add_argument("--smtp-port", type=int, default=587, help="SMTP port (default: 587)")
+    add_parser.add_argument("--no-ssl", action="store_true", default=False, help="Disable IMAP SSL")
+    add_parser.add_argument("--smtp-ssl", action="store_true", default=False, help="Enable SMTP SSL")
     add_parser.add_argument("--send", action="store_true", default=False, help="Allow sending emails")
     add_parser.add_argument("--delete", action="store_true", default=False, help="Allow deleting emails")
     add_parser.add_argument("--move", action="store_true", default=False, help="Allow moving emails")
     add_parser.add_argument("--threshold", type=float, default=None, help="Per-account protection threshold")
-    add_parser.add_argument("--imap-host", default=None, help="IMAP host (required for generic provider)")
-    add_parser.add_argument("--imap-port", type=int, default=993, help="IMAP port (default: 993)")
-    add_parser.add_argument("--smtp-host", default=None, help="SMTP host (required for generic provider)")
-    add_parser.add_argument("--smtp-port", type=int, default=587, help="SMTP port (default: 587)")
-    add_parser.add_argument("--no-ssl", action="store_true", default=False, help="Disable IMAP SSL")
-    add_parser.add_argument("--smtp-ssl", action="store_true", default=False, help="Enable SMTP SSL")
     add_parser.add_argument("--create-env", action="store_true", default=False, help="Create .env with password placeholders")
 
     # remove

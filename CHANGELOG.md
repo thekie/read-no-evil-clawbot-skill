@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-02-17
 
 ### Fixed
 - CLI argument order: global options (`--server`, `--timeout`) now work in any position, not just before the subcommand ([#7](https://github.com/thekie/read-no-evil-clawbot-skill/pull/7))

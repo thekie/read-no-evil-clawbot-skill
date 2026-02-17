@@ -116,6 +116,7 @@ Global options (`--server`, `--account`, `--folder`) can appear before or after 
 rnoe-mail.py accounts
 
 # List recent emails (last 30 days)
+# Output: [UID] ● DATE | SENDER | SUBJECT  (● = unread)
 rnoe-mail.py list
 rnoe-mail.py list --account myaccount --limit 10 --days 7
 

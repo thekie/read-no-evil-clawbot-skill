@@ -114,6 +114,20 @@ class McpClient:
 
     def call_tool(self, name, arguments=None):
         """Call an MCP tool. Returns (text, is_error)."""
+        result, is_error = self.call_tool_raw(name, arguments)
+        if isinstance(result, str):
+            return result, is_error
+
+        # Extract text from content array
+        texts = []
+        for item in result:
+            if item.get("type") == "text":
+                texts.append(item.get("text", ""))
+        text = "\n".join(texts) if texts else ""
+        return text, is_error
+
+    def call_tool_raw(self, name, arguments=None):
+        """Call an MCP tool. Returns (content_array, is_error) or (error_text, True)."""
         req = {
             "jsonrpc": "2.0",
             "id": self._next_id(),
@@ -128,15 +142,8 @@ class McpClient:
 
         result = resp.get("result", {})
         is_error = result.get("isError", False)
-
-        # Extract text from content array
         content = result.get("content", [])
-        texts = []
-        for item in content:
-            if item.get("type") == "text":
-                texts.append(item.get("text", ""))
-        text = "\n".join(texts) if texts else ""
-        return text, is_error
+        return content, is_error
 
     def close(self):
         """No persistent connection to close with HTTP transport."""
@@ -165,11 +172,41 @@ def cmd_list(client, args):
         arguments["limit"] = args.limit
     if args.days:
         arguments["days_back"] = args.days
-    text, is_error = client.call_tool("list_emails", arguments)
+    content, is_error = client.call_tool_raw("list_emails", arguments)
     if is_error:
-        print(text, file=sys.stderr)
+        error_text = content if isinstance(content, str) else str(content)
+        print(error_text, file=sys.stderr)
         sys.exit(1)
-    print(text)
+
+    # Try to parse structured JSON from text content items
+    emails = []
+    for item in content:
+        if item.get("type") == "text":
+            try:
+                parsed = json.loads(item["text"])
+                if isinstance(parsed, list):
+                    emails.extend(parsed)
+                elif isinstance(parsed, dict):
+                    emails.append(parsed)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    if emails and all("uid" in e for e in emails):
+        for email in emails:
+            uid = email.get("uid", "")
+            date = email.get("date", "")[:16]
+            sender = email.get("from", email.get("sender", ""))
+            subject = email.get("subject", "")
+            is_seen = email.get("is_seen", True)
+            indicator = " " if is_seen else "\u25cf"
+            print(f"[{uid}] {indicator} {date} | {sender} | {subject}")
+    else:
+        # Fallback: print raw text if not structured JSON
+        texts = []
+        for item in content:
+            if item.get("type") == "text":
+                texts.append(item.get("text", ""))
+        print("\n".join(texts) if texts else "")
 
 
 def cmd_read(client, args):

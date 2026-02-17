@@ -116,6 +116,7 @@ All commands accept `--server URL` to specify the MCP server (default: `http://l
 rnoe-mail.py accounts
 
 # List recent emails (last 30 days)
+# Output: [UID] ● DATE | SENDER | SUBJECT  (● = unread)
 rnoe-mail.py list
 rnoe-mail.py list --limit 10 --days 7 --account myaccount
 
